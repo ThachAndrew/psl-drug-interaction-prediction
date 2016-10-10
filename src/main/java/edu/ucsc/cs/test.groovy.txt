@@ -1,0 +1,287 @@
+////////////////////////////////////////////////////////////////////////
+//
+// ***** THIS GROOVY SCRIPT HAS BEEN DEPRECATED. PLEASE USE
+// DrugInteractionPrediction for DDI EXPERIMENTS *****
+//
+// *****TODO: Delete script after all experiments are complete!*****
+//
+////////////////////////////////////////////////////////////////////////
+
+package edu.ucsc.cs;
+
+import edu.umd.cs.psl.application.inference.MPEInference
+import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxLikelihoodMPE
+import edu.umd.cs.psl.config.*
+import edu.umd.cs.psl.core.*
+import edu.umd.cs.psl.core.inference.*
+import edu.umd.cs.psl.database.DataStore
+import edu.umd.cs.psl.database.Database
+import edu.umd.cs.psl.database.DatabasePopulator
+import edu.umd.cs.psl.database.Partition
+import edu.umd.cs.psl.database.rdbms.RDBMSDataStore
+import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver
+import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver.Type
+import edu.umd.cs.psl.evaluation.result.*
+import edu.umd.cs.psl.evaluation.statistics.RankingScore
+import edu.umd.cs.psl.evaluation.statistics.SimpleRankingComparator
+import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionStatistics
+import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionComparator
+import edu.umd.cs.psl.groovy.*
+import edu.umd.cs.psl.model.argument.ArgumentType
+import edu.umd.cs.psl.model.argument.GroundTerm
+import edu.umd.cs.psl.model.argument.Variable
+import edu.umd.cs.psl.model.atom.QueryAtom
+import edu.umd.cs.psl.model.parameters.PositiveWeight
+import edu.umd.cs.psl.model.predicate.Predicate
+import edu.umd.cs.psl.ui.loading.*
+import edu.umd.cs.psl.util.database.*
+import edu.umd.cs.psl.model.kernel.CompatibilityKernel
+import edu.umd.cs.psl.model.parameters.PositiveWeight
+import edu.umd.cs.psl.model.parameters.Weight
+import com.google.common.collect.Iterables
+import edu.ucsc.cs.OutputWriter;
+
+// Setting the config file parameters
+ConfigManager cm = ConfigManager.getManager();
+ConfigBundle dtBundle = cm.getBundle("fakhraei_sridhar_bioinformatics");
+
+// Settings the experiments parameters
+today = new Date();
+int blockingK = 15;
+double initialWeight = 5;
+boolean sq = true;
+boolean doWeightLearning = true; //Set to false to avoid weight learning
+
+
+String experiment_name = args[1];
+int folds = Integer.parseInt(args[2]);
+String interaction_type = args[3];
+int numDrugs = Integer.parseInt(args[4]);
+
+
+// Creating the variables to save the results of each fold
+double[] AUC_Folds = new double[folds];
+double[] AUPR_P_Folds = new double[folds];
+double[] AUPR_N_Folds = new double[folds];
+
+
+// Setting up the database
+
+String dbpath = "./testdb_fsbio";
+DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, false), dtBundle);
+
+
+// Creating the PSL Model
+// ======================
+
+PSLModel m = new PSLModel(this,data)
+
+m.add predicate : "ATCSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate : "SideEffectSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate : "GOSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate : "ligandSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate : "chemicalSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate : "seqSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate : "distSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate : "interacts" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate : "ignoredInteracts" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+
+m.add predicate : "validPair" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+
+//triad rules
+m.add rule : (ATCSimilarity(D1, D2) & interacts(D1, D3) & (D1 - D2) & (D2 - D3) & ~ignoredInteracts(D1, D3) & ~ignoredInteracts(D2, D3))>>interacts(D2, D3) , weight:initialWeight
+m.add rule : (SideEffectSimilarity(D1, D2) & interacts(D1, D3) & (D1 - D2) & (D2 - D3) & ~ignoredInteracts(D1, D3) & ~ignoredInteracts(D2, D3))>>interacts(D2, D3) , weight:initialWeight
+m.add rule : (GOSimilarity(D1, D2) & interacts(D1, D3) & (D1 - D2) & (D2 - D3) & ~ignoredInteracts(D1, D3) & ~ignoredInteracts(D2, D3))>>interacts(D2, D3) , weight:initialWeight
+m.add rule : (ligandSimilarity(D1, D2) & interacts(D1, D3) & (D1 - D2) & (D2 - D3) & ~ignoredInteracts(D1, D3) & ~ignoredInteracts(D2, D3))>>interacts(D2, D3) , weight:initialWeight
+m.add rule : (chemicalSimilarity(D1, D2) & interacts(D1, D3) & (D1 - D2) & (D2 - D3) & ~ignoredInteracts(D1, D3) & ~ignoredInteracts(D2, D3))>>interacts(D2, D3) , weight:initialWeight
+m.add rule : (seqSimilarity(D1, D2) & interacts(D1, D3) & (D1 - D2) & (D2 - D3) & ~ignoredInteracts(D1, D3) & ~ignoredInteracts(D2, D3))>>interacts(D2, D3) , weight:initialWeight
+m.add rule : (distSimilarity(D1, D2) & interacts(D1, D3) & (D1 - D2) & (D2 - D3) & ~ignoredInteracts(D1, D3) & ~ignoredInteracts(D2, D3))>>interacts(D2, D3) , weight:initialWeight
+
+//prior
+prior = m.add rule : ~ignoredInteracts(D1,D2) >> ~interacts(D1,D2),  weight : initialWeight
+
+m.add PredicateConstraint.Symmetric, on : interacts
+
+
+/* put all initial weights into a map for use to reset weights for each CV run */
+Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
+for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
+	weights.put(k, k.getWeight());
+
+// Setting which predicates are closed
+Set <Predicate>closedPredicates = [ignoredInteracts, ATCSimilarity, distSimilarity, seqSimilarity, ligandSimilarity, GOSimilarity, SideEffectSimilarity, chemicalSimilarity];
+Set <Predicate>closedPredicatesLinks=[interacts];
+Set <Predicate>closedPredicatesAll=[interacts];
+closedPredicatesAll.addAll(closedPredicates);
+
+
+// Cross Validation
+// ================
+
+for (int k=0;k<folds;k++)
+{
+	System.out.println("\n-------------------");
+	TimeNow = new Date();
+	System.out.println("Fold "+(k+1).toString()+" Start: "+TimeNow);
+
+	// Setting up the partitions for final model
+	Partition writeCVLabels =  new Partition(666+(k*10)); // Labels for the Cross-validation hold-outs
+	Partition writeCVTest =  new Partition(667+(k*10)); // Partition to write the predictions in
+	Partition readCVTrain =  new Partition(668+(k*10)); // Observed training data for the training (i.e., all data minus hold-outs)
+
+	//Setting up the the partitions for weight learning
+	Partition writeWLLabels =  new Partition(669+(k*10)); // Labels for the weight Learning
+	Partition readWLTrain =  new Partition(671+(k*10)); // Training data for Weight Learning
+	Partition writeWLTest =  new Partition(672+(k*10)); // Partition to write prediction in for Weight Learning
+
+	// Creating the partition to read the data
+	Partition cv_similarities =  new Partition(673+(k*10));
+	Partition wl_similarities = new Partition(674+(k*10));
+
+	// Weight Learning
+	// ===============
+
+	if (doWeightLearning)
+	{
+		for (CompatibilityKernel ck : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
+			ck.setWeight(weights.get(ck))
+		
+		System.out.println "Weight Learning fold: "+(k+1).toString();
+
+		// the actual weight learning happens here
+		Database dbWLTrain = data.getDatabase(writeWLTest, closedPredicates, readWLTrain, wl_similarities);
+		Database dbWLLabels = data.getDatabase(writeWLLabels, closedPredicatesAll);
+
+		System.out.println( "DEBUG": Queries.getAllAtoms(dbWLTrain, ATCSimilarity).size() );
+
+		MaxLikelihoodMPE wLearn = new MaxLikelihoodMPE(m,dbWLTrain,dbWLLabels,dtBundle);
+		wLearn.learn();
+
+		dbWLTrain.close();
+		dbWLLabels.close();
+
+		// Printing the new weights
+		System.out.println m;
+	};
+
+	// Inferring
+	// =========
+
+	System.out.println "Inferring fold: "+(k+1).toString();
+
+	Database dbCVTrain = data.getDatabase(writeCVTest, closedPredicates ,readCVTrain, cv_similarities);
+
+	MPEInference mpe = new MPEInference(m, dbCVTrain, dtBundle);
+	FullInferenceResult result = mpe.mpeInference();
+	mpe.close();
+	mpe.finalize();
+
+	dbCVTrain.close();
+
+	timeNow = new Date();
+	System.out.println("\nFold "+(k+1).toString()+" End: "+timeNow);
+	System.out.println("-------------------\n");
+
+
+
+	//Begin Evaluate Discrete
+	//==============
+
+	System.out.println "Evaluating fold: "+(k+1).toString();
+
+	def LabelsDB = data.getDatabase(writeCVLabels, closedPredicatesAll)
+	Database PredictionsDB = data.getDatabase(new Partition(6000+k), writeCVTest)
+
+	def comparator = new DiscretePredictionComparator(PredictionsDB);
+	comparator.setBaseline(LabelsDB);
+	comparator.setThreshold(Double.MIN_VALUE);
+	maxAtoms = Queries.getAllAtoms(LabelsDB, interacts).size();
+
+	DiscretePredictionStatistics ds = comparator.compare(interacts, maxAtoms);
+
+	System.out.println("\nPrecision: " + ds.getPrecision( DiscretePredictionStatistics.BinaryClass.POSITIVE ));
+	System.out.println("Recall: " + ds.getRecall( DiscretePredictionStatistics.BinaryClass.POSITIVE ));
+
+	OutputWriter ow = new OutputWriter(PredictionsDB, interacts, 'crd', k+1.toString(), 'psl')
+	ow.outputToFile();
+	
+	//Begin Evaluate Ranking
+	
+	comparator = new SimpleRankingComparator(PredictionsDB)
+	comparator.setBaseline(LabelsDB)
+
+	System.out.println("Size of labels DB: " + Queries.getAllAtoms(LabelsDB, interacts).size() + " and size of PredictionsDB: " + Queries.getAllAtoms(PredictionsDB, interacts).size() )
+
+	// Choosing what metrics to report
+	def metrics = [RankingScore.AUPRC, RankingScore.NegAUPRC,  RankingScore.AreaROC]
+	double [] score = new double[metrics.size()]
+
+	try {
+		for (int i = 0; i < metrics.size(); i++) {
+			comparator.setRankingScore(metrics.get(i))
+			score[i] = comparator.compare(interacts)
+		}
+		//Storing the performance values of the current fold
+		AUPR_P_Folds[k]=score[0];
+		AUPR_N_Folds[k]=score[1];
+		AUC_Folds[k]=score[2];
+
+		System.out.println("\nArea under positive-class PR curve: " + score[0])
+		System.out.println("Area under negetive-class PR curve: " + score[1])
+		System.out.println("Area under ROC curve: " + score[2])
+	}
+	catch (ArrayIndexOutOfBoundsException e) {
+		System.out.println("No evaluation data! Terminating!");
+	}
+	
+	PredictionsDB.close();
+	LabelsDB.close();
+
+
+}
+
+// End of cross validation
+
+//Evaluation code
+/*
+
+
+System.out.println("\n========================");
+
+// Generating Performance Mean and STDev
+
+double FinalAUC=0,FinalAUPR_N=0,FinalAUPR_P=0;
+double STDAUC=0, STDAUPR_N=0, STDAUPR_P=0;
+
+for (int i=0; i<folds; i++)
+{
+	FinalAUC+=AUC_Folds[i];
+	FinalAUPR_N+=AUPR_N_Folds[i];
+	FinalAUPR_P+=AUPR_P_Folds[i];
+}
+
+FinalAUC=FinalAUC/folds;
+FinalAUPR_N=FinalAUPR_N/folds;
+FinalAUPR_P=FinalAUPR_P/folds;
+
+for (int i=0; i<folds; i++)
+{
+	STDAUC=STDAUC + Math.pow(FinalAUC-AUC_Folds[i],2);
+	STDAUPR_N=STDAUPR_N + Math.pow(FinalAUPR_N-AUPR_N_Folds[i],2);
+	STDAUPR_P=STDAUPR_P + Math.pow(FinalAUPR_P-AUPR_P_Folds[i],2);
+}
+
+STDAUC=Math.sqrt(STDAUC/folds);
+STDAUPR_N=Math.sqrt(STDAUPR_N/folds);
+STDAUPR_P=Math.sqrt(STDAUPR_P/folds);
+
+System.out.println("\nFinal Area under positive-class PR curve: " + FinalAUPR_P +" +/- "+ STDAUPR_P)
+System.out.println("Final Area under negative-class PR curve: " + FinalAUPR_N +" +/- "+ STDAUPR_N)
+System.out.println("Final Area under ROC curve: " + FinalAUC +" +/- "+ STDAUC)
+System.out.println(" ");
+System.out.println "========================";
+System.out.println "Done! ";
+
+*/
+
+

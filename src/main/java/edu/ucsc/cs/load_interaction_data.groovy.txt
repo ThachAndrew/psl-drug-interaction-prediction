@@ -1,0 +1,220 @@
+////////////////////////////////////////////////////////////////////////
+//
+// ***** THIS GROOVY SCRIPT HAS BEEN DEPRECATED. PLEASE USE
+// DrugInteractionPrediction for DDI EXPERIMENTS *****
+//
+// *****TODO: Delete script after all experiments are complete!*****
+//
+////////////////////////////////////////////////////////////////////////
+
+
+package edu.ucsc.cs;
+
+import edu.umd.cs.psl.application.inference.MPEInference
+import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxLikelihoodMPE
+import edu.umd.cs.psl.config.*
+import edu.umd.cs.psl.core.*
+import edu.umd.cs.psl.core.inference.*
+import edu.umd.cs.psl.database.DataStore
+import edu.umd.cs.psl.database.Database
+import edu.umd.cs.psl.database.DatabasePopulator
+import edu.umd.cs.psl.database.Partition
+import edu.umd.cs.psl.database.rdbms.RDBMSDataStore
+import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver
+import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver.Type
+import edu.umd.cs.psl.evaluation.result.*
+import edu.umd.cs.psl.evaluation.statistics.RankingScore
+import edu.umd.cs.psl.evaluation.statistics.SimpleRankingComparator
+import edu.umd.cs.psl.groovy.*
+import edu.umd.cs.psl.model.argument.ArgumentType
+import edu.umd.cs.psl.model.argument.GroundTerm
+import edu.umd.cs.psl.model.argument.Variable
+import edu.umd.cs.psl.model.atom.QueryAtom
+import edu.umd.cs.psl.model.parameters.PositiveWeight
+import edu.umd.cs.psl.model.predicate.Predicate
+import edu.umd.cs.psl.ui.loading.*
+import edu.umd.cs.psl.util.database.*
+
+
+String experiment_name = args[1];
+int folds = Integer.parseInt(args[2]);
+String interaction_type = args[3];
+int blockingK = Integer.parseInt(args[4]);
+String blocking_type = args[5];
+
+interactions_file = 'interacts.csv'
+interactions_ids = 'interactsids.csv'
+
+// Setting the data path
+// Change these to change the blocking parameter K
+def base_dir = 'data'+java.io.File.separator;
+
+def interactions_dir = base_dir + experiment_name + java.io.File.separator + interaction_type + java.io.File.separator;
+
+//Setting up datastore
+
+ConfigManager cm = ConfigManager.getManager();
+ConfigBundle dtBundle = cm.getBundle("fakhraei_sridhar_bioinformatics");
+
+String dbpath = "./testdb_fsbio";
+DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), dtBundle);
+
+// Only defining predicates for loading
+// ======================
+
+PSLModel m = new PSLModel(this,data)
+
+m.add predicate : "interacts" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate : "ignoredInteracts" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+
+m.add predicate : "validPair" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+
+/* Loading all the data into partitions */
+
+
+
+for (int k=0;k<folds;k++)
+{
+	System.out.println("\n-------------------");
+	TimeNow = new Date();
+	System.out.println("Fold "+(k+1).toString()+" Start: "+TimeNow);
+
+	// Setting up the partitions for final model
+	Partition writeCVLabels =  new Partition(666+(k*10)); // Labels for the Cross-validation hold-outs
+	Partition writeCVTest =  new Partition(667+(k*10)); // Partition to write the predictions in
+	Partition readCVTrain =  new Partition(668+(k*10)); // Observed training data for the training (i.e., all data minus hold-outs)
+
+	//Setting up the the partitions for weight learning
+	Partition writeWLLabels =  new Partition(669+(k*10)); // Labels for the weight Learning
+	Partition readWLTrain =  new Partition(671+(k*10)); // Training data for Weight Learning
+	Partition writeWLTest =  new Partition(672+(k*10)); // Partition to write prediction in for Weight Learning
+
+	// Setting up the inserters
+	insertWLTrain = data.getInserter(interacts, readWLTrain);
+	insertWLLabels = data.getInserter(interacts, writeWLLabels);
+	insertCVIgnored = data.getInserter(ignoredInteracts, readWLTrain);
+
+	insertCVTrain = data.getInserter(interacts, readCVTrain);
+	insertCVLabels = data.getInserter(interacts, writeCVLabels);
+
+	insertWLTest = data.getInserter(interacts, writeWLTest);
+	insertCVTest = data.getInserter(interacts, writeCVTest);
+
+	insertValidWL = data.getInserter(validPair, readWLTrain);
+	insertValidCV = data.getInserter(validPair, readCVTrain);
+
+	// Reading the interactions and setting the data for current fold
+
+	CVHoldoutFold = k+1; // current hold out fold
+	WLHoldoutFold = k+2; // current hold out fold for weight learning
+	if (k==folds-1) WLHoldoutFold = 1;
+
+	System.out.print "\nReading INTERACTS files for fold "+(k+1).toString()+" ";
+
+	// Reading all the other folds as training data
+	for (int j=1;j<=folds;j++)
+	{
+		current_interactions_dir = interactions_dir + java.io.File.separator + j + java.io.File.separator;
+		InserterUtils.loadDelimitedData(insertValidCV, current_interactions_dir + interactions_ids);
+		InserterUtils.loadDelimitedData(insertValidWL, current_interactions_dir + interactions_ids);
+
+		System.out.print ".";
+		if ((j!=CVHoldoutFold) && (j!=WLHoldoutFold))
+		{
+			InserterUtils.loadDelimitedDataTruth(insertCVTrain, current_interactions_dir + interactions_file);
+			InserterUtils.loadDelimitedDataTruth(insertWLTrain, current_interactions_dir + interactions_file);
+		}
+	}
+
+	System.out.print ".";
+	train_interactions_dir = interactions_dir + java.io.File.separator + WLHoldoutFold + java.io.File.separator;
+
+	// Adding the weight learning held-out to the final training data
+	InserterUtils.loadDelimitedDataTruth(insertCVTrain, train_interactions_dir + interactions_file);
+
+	// Reading the weight learning held-out as the the labels
+	InserterUtils.loadDelimitedDataTruth(insertWLLabels, train_interactions_dir + interactions_file);
+
+	System.out.print ".";
+
+	// Reading the cross-validation held out as labels for weight learning and also into the ignored_interacts_DT.
+	// Weight learning will not be able to see these labels because of they will be ignored and the body of their rules will be 0.
+
+	holdout_interactions_dir = interactions_dir + java.io.File.separator + CVHoldoutFold + java.io.File.separator;
+
+	//InserterUtils.loadDelimitedDataTruth(insertWLLabels, holdout_interactions_dir + interactions_file);
+	InserterUtils.loadDelimitedData(insertCVIgnored, holdout_interactions_dir + interactions_ids);
+	
+
+	// Reading the cross-validation held out as labels for the final model
+	InserterUtils.loadDelimitedDataTruth(insertCVLabels, holdout_interactions_dir + interactions_file);
+
+
+
+	//Insert drug pair ids into write partitions
+	InserterUtils.loadDelimitedData(insertCVTest, holdout_interactions_dir + interactions_ids);
+
+	InserterUtils.loadDelimitedData(insertWLTest, holdout_interactions_dir + interactions_ids);
+	InserterUtils.loadDelimitedData(insertWLTest, train_interactions_dir + interactions_ids);
+}
+
+def learnWeights(m,data,config,fold, weights){ 
+
+    /// Weight Learning
+    // ===============
+
+    def timeNow = new Date();
+    log.debug("Fold "+ fold +" Weight Learning: "+TimeNow);
+		  
+    //Reseting all the weights in each fold
+    config.rules.triad_1.setWeight(new PositiveWeight(config.initialWeight));
+    config.rules.triad_2.setWeight(new PositiveWeight(config.initialWeight));
+    config.rules.triad_3.setWeight(new PositiveWeight(config.initialWeight));
+    config.rules.triad_4.setWeight(new PositiveWeight(config.initialWeight));
+    config.rules.triad_5.setWeight(new PositiveWeight(config.initialWeight));
+    config.rules.triad_6.setWeight(new PositiveWeight(config.initialWeight));
+    config.rules.triad_7.setWeight(new PositiveWeight(config.initialWeight));
+    config.rules.triad_8.setWeight(new PositiveWeight(config.initialWeight));
+
+    prior.setWeight(new PositiveWeight(config.initialWeight));
+
+    // the actual weight learning happens here
+    //Database dbWLTrain = data.getDatabase(writeWLTest, closedPredicates, readWLTrain, readSimilarities);
+    Database dbWLTrain = data.getDatabase(dtf.wlTest, config.closedTest, dtf.wlTrain, dtf.activeSims);
+    Database dbWLLabels = data.getDatabase(dtf.wlTruth, config.closedTrain);
+				
+    MaxLikelihoodMPE wLearn = new MaxLikelihoodMPE(m,dbWLTrain,dbWLLabels,config.dtBundle);
+    wLearn.learn();
+
+    dbWLTrain.close();
+    dbWLLabels.close();
+
+    // Printing the new weights
+    log.debug(m);
+  };
+		
+  // Inferring
+  // =========
+  def runInference(m,data,config,dtf) { 
+    def timeNow = new Date();
+    log.debug("Fold "+(dtf.fold+1).toString()+" Inferring: "+timeNow);
+
+    //Database dbCVTrain = data.getDatabase(writeCVTest, closedPredicates ,readCVTrain, readSimilarities);
+    Database dbCVTrain = data.getDatabase(dtf.cvTest, config.closedTest , dtf.cvTrain, dtf.activeSims);
+
+    MPEInference mpe = new MPEInference(m, dbCVTrain, config.dtBundle);
+    FullInferenceResult result = mpe.mpeInference();
+    mpe.close();
+    mpe.finalize();
+
+    dbCVTrain.close();
+
+    timeNow = new Date();
+    log.debug("Fold "+(dtf.fold+1).toString()+" End: "+timeNow);
+    log.debug("-------------------");
+  }
+
+
+
+
+
