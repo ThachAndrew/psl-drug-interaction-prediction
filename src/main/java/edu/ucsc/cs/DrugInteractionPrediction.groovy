@@ -175,45 +175,7 @@ class DrugInteractionPrediction {
 
 	}
 
-	def defineNonCollectiveModel(config, data, m){
-
-		m.add predicate : "ATCSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "SideEffectSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "GOSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "ligandSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "chemicalSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "seqSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "distSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "interacts" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate: "validInteraction" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate: "observedInteracts" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-
-    	// check if validInteraction(D1, D3) still needed
-    	m.add rule : (ATCSimilarity(D1, D2) & observedInteracts(D1, D3) & validInteraction(D1, D3) & validInteraction(D2, D3) & (D2 - D3) & (D1 - D2))>>interacts(D2, D3) , weight:config.initialWeight
-		m.add rule : (SideEffectSimilarity(D1, D2) & observedInteracts(D1, D3) & validInteraction(D1, D3) & validInteraction(D2, D3) & (D2 - D3) & (D1 - D2))>>interacts(D2, D3) , weight:config.initialWeight
-		m.add rule : (GOSimilarity(D1, D2) & observedInteracts(D1, D3) & validInteraction(D1, D3) & validInteraction(D2, D3) & (D2 - D3) & (D1 - D2))>>interacts(D2, D3) , weight:config.initialWeight
-		m.add rule : (ligandSimilarity(D1, D2) & observedInteracts(D1, D3) & validInteraction(D1, D3) & validInteraction(D2, D3) & (D2 - D3) & (D1 - D2))>>interacts(D2, D3) , weight:config.initialWeight
-		m.add rule : (chemicalSimilarity(D1, D2) & observedInteracts(D1, D3) & validInteraction(D1, D3) & validInteraction(D2, D3) & (D2 - D3) & (D1 - D2))>>interacts(D2, D3) , weight:config.initialWeight
-		m.add rule : (seqSimilarity(D1, D2) & observedInteracts(D1, D3) & validInteraction(D1, D3) & validInteraction(D2, D3) & (D2 - D3) & (D1 - D2))>>interacts(D2, D3) , weight:config.initialWeight
-		m.add rule : (distSimilarity(D1, D2) & observedInteracts(D1, D3) & validInteraction(D1, D3) & validInteraction(D2, D3) & (D2 - D3) & (D1 - D2))>>interacts(D2, D3) , weight:config.initialWeight
-
-		//prior
-		m.add rule : validInteraction(D1,D2) >> ~interacts(D1,D2),  weight : config.initialWeight
-
-		m.add PredicateConstraint.Symmetric, on : interacts
-
-		Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
-		
-		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-		weights.put(k, k.getWeight());
-
-		config.closedPredicatesInference = [observedInteracts, validInteraction, ATCSimilarity, distSimilarity, seqSimilarity, ligandSimilarity, GOSimilarity, SideEffectSimilarity, chemicalSimilarity];
-		config.closedPredicatesTruth = [interacts];
-
-		return weights
-	}
-
-
+	
 	def loadData(data,config) { 
 
 	    // Loading the data
@@ -514,86 +476,6 @@ class DrugInteractionPrediction {
 		InserterUtils.loadDelimitedData(insertCVTest, holdout_interactions_dir + interactions_ids);
 	}
 
-	def bootStrappingWeightLearning(m, data, config, df, weights, de){
-		def fold = df.cvFold;
-
-		def timeNow = new Date();
-		log.debug("Fold " + fold + " Bootstrapping Weight Learning: " + timeNow);
-
-		def numIter = 3;
-
-		for(int i = 0; i < numIter; i++){
-			learnWeights(m, data, config, df, weights, 2);
-			runInference(m, data, config, df, df.wlTest, df.wlTrain, df.wlSim);
-			evaluateResults(data, config, df, de, df.wlTruth, df.wlTest);
-			
-			Database WLPredictionsDB = data.getDatabase(data.getPartition("dummy_partition"), df.wlTest);
-			Set<GroundAtom> weightLearningPredictions = Queries.getAllAtoms( WLPredictionsDB, interacts );
-			WLPredictionsDB.close();
-			data.deletePartition(data.getPartition("dummy_partition"));
-
-			Database wlTruthDB = data.getDatabase(data.getPartition("dummy_partition"), df.wlTruth);
-			Set<GroundAtom> atomTruth = Queries.getAllAtoms(wlTruthDB, interacts);
-
-			Set<GroundAtom> atomsToMakePositive = new HashSet<GroundAtom>();
-			Set<GroundAtom> atomsToMakeNegative = new HashSet<GroundAtom>();
-
-			int numTermsAdded = 0;
-
-			for(GroundAtom ga: weightLearningPredictions){
-				double value = ga.getValue();
-				GroundTerm[] t = ga.getArguments();
-
-				//System.out.println(ga.toString() + ": " + value);
-
-				double truthVal = wlTruthDB.getAtom(interacts, t).getValue();
-
-				//if(value >= 0.0 && truthVal == 0.0){
-				if(value < 0.1 && truthVal == 0.0){
-					wlTruthDB.deleteAtom(ga);
-					atomsToMakeNegative.add(ga);
-				
-					numTermsAdded++;
-					
-				}
-				if (value >= 0.5 && truthVal == 0.0){
-					wlTruthDB.deleteAtom(ga);
-					atomsToMakePositive.add(ga);
-
-					numTermsAdded++;
-				}
-			}
-			
-			wlTruthDB.close();
-			data.deletePartition(data.getPartition("dummy_partition"));
-
-			
-			def insertWLLabels = data.getInserter(interacts, df.wlTruth);
-			def insertWLTrain = data.getInserter(interacts, df.wlTrain);
-			def insertWLTest = data.getInserter(interacts, df.wlTest);
-			def insertCVTrain = data.getInserter(interacts, df.cvTrain);
-			
-			for(GroundAtom ga: atomsToMakeNegative){
-				insertWLLabels.insertValue(0.0, ga.getArguments());
-				insertWLTest.insert(ga.getArguments());
-				insertCVTrain.insertValue(0.0, ga.getArguments());
-
-			}
-
-			for(GroundAtom ga: atomsToMakePositive){
-				insertWLLabels.insertValue(1.0, ga.getArguments());
-				insertWLTest.insert(ga.getArguments());
-				insertCVTrain.insertValue(1.0, ga.getArguments());
-			}
-			
-
-			System.out.println("Number of terms added this iteration: " + numTermsAdded);
-
-		}
-
-	}
-
-
 	def learnWeights(m,data,config,df, weights, learnerOption){ 
 
 	    /// Weight Learning
@@ -755,7 +637,7 @@ class DrugInteractionPrediction {
 			}
 			this.runInference(m,data,config,df, df.cvTest, df.cvTrain, df.cvSim);
 
-			this.evaluateResults(data,config,df,de, df.cvTruth, df.cvTest, true);
+			this.evaluateResults(data,config,df,de, df.cvTruth, df.cvTest, false);
 
 	  	}
 	  	
@@ -767,11 +649,7 @@ class DrugInteractionPrediction {
 	  static void main(args){
 
 	  	String[] experiments = ['all_dataset2', 'all_dataset1']
-	  	//String[] experiments = ['all_dataset2']
 	  	String[] interactionTypes = ['all'];
-
-	  	//String[] experiments = ['cross_validation_subset']
-	  	//String[] interactionTypes = ['crd']
 
 	  	for(String exp: experiments){
 	  		def numDrugs = 315;
