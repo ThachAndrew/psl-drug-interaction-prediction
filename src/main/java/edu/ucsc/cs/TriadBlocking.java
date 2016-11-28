@@ -13,19 +13,17 @@ import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import edu.umd.cs.psl.database.DataStore;
-import edu.umd.cs.psl.database.Database;
-import edu.umd.cs.psl.database.Partition;
-import edu.umd.cs.psl.database.loading.Inserter;
-import edu.umd.cs.psl.model.argument.GroundTerm;
-import edu.umd.cs.psl.model.argument.Term;
-import edu.umd.cs.psl.model.atom.GroundAtom;
-import edu.umd.cs.psl.model.atom.QueryAtom;
-import edu.umd.cs.psl.model.atom.RandomVariableAtom;
-import edu.umd.cs.psl.model.predicate.Predicate;
-import edu.umd.cs.psl.model.predicate.StandardPredicate;
-import edu.umd.cs.psl.util.collection.HashList;
-import edu.umd.cs.psl.util.database.Queries;
+import org.linqs.psl.database.DataStore;
+import org.linqs.psl.database.Database;
+import org.linqs.psl.database.Partition;
+import org.linqs.psl.database.loading.Inserter;
+import org.linqs.psl.model.term.Constant;
+import org.linqs.psl.model.atom.GroundAtom;
+import org.linqs.psl.model.atom.QueryAtom;
+import org.linqs.psl.model.atom.RandomVariableAtom;
+import org.linqs.psl.model.predicate.Predicate;
+import org.linqs.psl.model.predicate.StandardPredicate;
+import org.linqs.psl.database.Queries;
 
 public class TriadBlocking{
 
@@ -41,7 +39,7 @@ public class TriadBlocking{
 	// termIndex: Which term in the predicate. e.g., P(1,2,3) and -1 for any location
 	// activeTerm: The Term to look for
 	// allSimilarities: Set of all similairites.
-	public Set<GroundAtom> knnBlockingOne(boolean positiveValues, int kActive, int termIndex, GroundTerm activeTerm, Set<GroundAtom> allSimilarities){
+	public Set<GroundAtom> knnBlockingOne(boolean positiveValues, int kActive, int termIndex, Constant activeTerm, Set<GroundAtom> allSimilarities){
 
 		// Filtering the similiarity for only one term
 		Set<GroundAtom> querySimilarities = GetQueryAtoms(allSimilarities, termIndex, activeTerm);
@@ -63,14 +61,14 @@ public class TriadBlocking{
 	
 	// == Naive KNN Blocking Set
 	// Same arguments as above
-	public Set<GroundAtom> knnBlockingSet(boolean positiveValues, int kActive, int termIndex, Set<GroundTerm> activeTermSet, Set<GroundAtom> allSimilarities){
+	public Set<GroundAtom> knnBlockingSet(boolean positiveValues, int kActive, int termIndex, Set<Constant> activeTermSet, Set<GroundAtom> allSimilarities){
 
 		Set<GroundAtom> resultAtoms = new HashSet<GroundAtom>();
-		Iterator<GroundTerm> itrTerm = activeTermSet.iterator();
+		Iterator<Constant> itrTerm = activeTermSet.iterator();
 		
 		while (itrTerm.hasNext())
 		{
-			GroundTerm item = itrTerm.next();
+			Constant item = itrTerm.next();
 			resultAtoms.addAll(knnBlockingOne(positiveValues, kActive, termIndex, item, allSimilarities));
 		}
 
@@ -82,12 +80,12 @@ public class TriadBlocking{
 	public Set<GroundAtom> observedLinksInTraining(Set<GroundAtom> allSimilarities, Set<GroundAtom> trainingAtoms, int kLessActive, int kMoreActive){
 
 		Set<GroundAtom> resultAtoms = new HashSet<GroundAtom>();
-		Set<GroundTerm> moreActiveSet = new HashSet<GroundTerm>();
-		Set<GroundTerm> lessActiveSet = new HashSet<GroundTerm>();
+		Set<Constant> moreActiveSet = new HashSet<Constant>();
+		Set<Constant> lessActiveSet = new HashSet<Constant>();
 
 		for(GroundAtom ga: trainingAtoms){
 			double value = ga.getValue();
-			GroundTerm[] terms = ga.getArguments();
+			Constant[] terms = ga.getArguments();
 			int arity = ga.getArity();
 
 			if(value == 1.0){
@@ -110,8 +108,8 @@ public class TriadBlocking{
 	public Set<GroundAtom> allLinksInTesting(Set<GroundAtom> allSimilarities, Set<GroundAtom> testingAtoms, int kLessActive, int kMoreActive){
 
 		Set<GroundAtom> resultAtoms = new HashSet<GroundAtom>();
-		Set<GroundTerm> moreActiveSet = GetQueryTerms(testingAtoms, 0);
-		Set<GroundTerm> lessActiveSet = GetQueryTerms(allSimilarities, 0);
+		Set<Constant> moreActiveSet = GetQueryTerms(testingAtoms, 0);
+		Set<Constant> lessActiveSet = GetQueryTerms(allSimilarities, 0);
 		lessActiveSet.removeAll(moreActiveSet);
 
 		// System.out.println( "more active set: " + moreActiveSet.size() + ", less active set: " + lessActiveSet.size() );
@@ -125,13 +123,13 @@ public class TriadBlocking{
 	public Set<GroundAtom> testTermsWithObservedLinks(Set<GroundAtom> allSimilarities, Set<GroundAtom> trainingAtoms, Set<GroundAtom> testingAtoms, int kLessActive, int kMoreActive){
 
 		Set<GroundAtom> resultAtoms = new HashSet<GroundAtom>();
-		Set<GroundTerm> testTerms = GetQueryTerms(testingAtoms, 0);
+		Set<Constant> testTerms = GetQueryTerms(testingAtoms, 0);
 		Set<GroundAtom> activeSimilarities = new HashSet<GroundAtom>();
-		Map<List<GroundTerm> ,GroundAtom> similaritiesMap = this.getGroundAtomsMap(allSimilarities);
+		Map<List<Constant> ,GroundAtom> similaritiesMap = this.getGroundAtomsMap(allSimilarities);
 
 		for(GroundAtom ga: trainingAtoms){
 			double value = ga.getValue();
-			GroundTerm[] terms = ga.getArguments();
+			Constant[] terms = ga.getArguments();
 			int arity = ga.getArity();
 
 			if(value == 1.0){
@@ -154,13 +152,13 @@ public class TriadBlocking{
 	public Set<GroundAtom> observedTrainWithTestTerm(Set<GroundAtom> allSimilarities, Set<GroundAtom> trainingAtoms, Set<GroundAtom> testingAtoms, int kLessActive, int kMoreActive){
 
 		Set<GroundAtom> resultAtoms = new HashSet<GroundAtom>();
-		Set<GroundTerm> testTerms = GetQueryTerms(testingAtoms, 0);
+		Set<Constant> testTerms = GetQueryTerms(testingAtoms, 0);
 
 		Set<GroundAtom> activeSet = new HashSet<GroundAtom>();
 
 		for(GroundAtom ga: trainingAtoms){
 			double value = ga.getValue();
-			GroundTerm[] terms = ga.getArguments();
+			Constant[] terms = ga.getArguments();
 			int arity = ga.getArity();
 
 			if(value == 1.0){
@@ -187,9 +185,9 @@ public class TriadBlocking{
 	// ==============================================
 
 	// == Extracts the terms (Drugs) out of QueryAtoms set (-1 for all)
-	public Set<GroundTerm> GetQueryTerms(Set<GroundAtom> queryAtoms, int index){
+	public Set<Constant> GetQueryTerms(Set<GroundAtom> queryAtoms, int index){
 		
-		Set<GroundTerm> terms = new HashSet<GroundTerm>();
+		Set<Constant> terms = new HashSet<Constant>();
 		Iterator<GroundAtom> itr = queryAtoms.iterator();
 		
 		int arity = 0;
@@ -216,12 +214,12 @@ public class TriadBlocking{
 	
 	}
 
-	public Map<List<GroundTerm>, GroundAtom> getGroundAtomsMap(Set<GroundAtom> atoms){
-		Map<List<GroundTerm>, GroundAtom> resultMap = new HashMap<List<GroundTerm>,GroundAtom>();
+	public Map<List<Constant>, GroundAtom> getGroundAtomsMap(Set<GroundAtom> atoms){
+		Map<List<Constant>, GroundAtom> resultMap = new HashMap<List<Constant>,GroundAtom>();
 		Iterator<GroundAtom> itrAtom = atoms.iterator();
 		while( itrAtom.hasNext()){
 			GroundAtom atom = itrAtom.next();
-			List<GroundTerm> terms = new ArrayList<GroundTerm>(Arrays.asList(atom.getArguments()));
+			List<Constant> terms = new ArrayList<Constant>(Arrays.asList(atom.getArguments()));
 			resultMap.put( terms, atom );
 		}
 
@@ -231,7 +229,7 @@ public class TriadBlocking{
 
 
 	// == Get all the atoms with specific Term in them
-	private Set<GroundAtom> GetQueryAtoms(Set<GroundAtom> allAtoms, int termIndex, GroundTerm activeTerm) {
+	private Set<GroundAtom> GetQueryAtoms(Set<GroundAtom> allAtoms, int termIndex, Constant activeTerm) {
 		
 		Set<GroundAtom> resultAtoms = new HashSet<GroundAtom>();
 		Iterator<GroundAtom> itrAtom = allAtoms.iterator();

@@ -11,14 +11,14 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
-import edu.umd.cs.psl.database.Database;
-import edu.umd.cs.psl.evaluation.statistics.filter.AtomFilter;
-import edu.umd.cs.psl.evaluation.statistics.filter.MaxValueFilter;
-import edu.umd.cs.psl.model.argument.GroundTerm;
-import edu.umd.cs.psl.model.atom.GroundAtom;
-import edu.umd.cs.psl.model.atom.ObservedAtom;
-import edu.umd.cs.psl.model.predicate.Predicate;
-import edu.umd.cs.psl.util.database.Queries;
+import org.linqs.psl.database.Database;
+import org.linqs.psl.utils.evaluation.statistics.filter.AtomFilter;
+import org.linqs.psl.utils.evaluation.statistics.filter.MaxValueFilter;
+import org.linqs.psl.model.term.Constant;
+import org.linqs.psl.model.atom.GroundAtom;
+import org.linqs.psl.model.atom.ObservedAtom;
+import org.linqs.psl.model.predicate.Predicate;
+import org.linqs.psl.database.Queries;
 
 public class OutputWriter {
 	
@@ -53,10 +53,10 @@ public class OutputWriter {
 			writer = new BufferedWriter(new FileWriter(resultsFile, appendOption));
 			
 			for (GroundAtom atom : Queries.getAllAtoms(result, p)){
-				GroundTerm[] terms = atom.getArguments();
+				Constant[] terms = atom.getArguments();
                                 
                                 StringBuilder output = new StringBuilder();
-                                for (GroundTerm t : terms){
+                                for (Constant t : terms){
                                     output.append(t + ",");
                                 }
                                 

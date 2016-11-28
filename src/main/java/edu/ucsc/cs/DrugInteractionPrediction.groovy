@@ -8,39 +8,36 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-import edu.umd.cs.psl.application.inference.MPEInference
-import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxLikelihoodMPE
-import edu.umd.cs.psl.application.learning.weight.em.PairedDualLearner
-import edu.umd.cs.psl.application.learning.weight.maxmargin.L1MaxMargin
-import edu.umd.cs.psl.config.*
-import edu.umd.cs.psl.core.*
-import edu.umd.cs.psl.core.inference.*
-import edu.umd.cs.psl.database.DataStore
-import edu.umd.cs.psl.database.Database
-import edu.umd.cs.psl.database.DatabasePopulator
-import edu.umd.cs.psl.database.Partition
-import edu.umd.cs.psl.database.rdbms.RDBMSDataStore
-import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver
-import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver.Type
-import edu.umd.cs.psl.evaluation.result.*
-import edu.umd.cs.psl.evaluation.statistics.RankingScore
-import edu.umd.cs.psl.evaluation.statistics.SimpleRankingComparator
-import edu.umd.cs.psl.groovy.*
-import edu.umd.cs.psl.model.argument.ArgumentType
-import edu.umd.cs.psl.model.argument.GroundTerm
-import edu.umd.cs.psl.model.argument.Variable
-import edu.umd.cs.psl.model.atom.GroundAtom;
-import edu.umd.cs.psl.model.atom.QueryAtom
-import edu.umd.cs.psl.model.kernel.rule.AbstractRuleKernel
-import edu.umd.cs.psl.model.parameters.PositiveWeight
-import edu.umd.cs.psl.model.predicate.Predicate
-import edu.umd.cs.psl.ui.loading.*
-import edu.umd.cs.psl.util.database.*
+import org.linqs.psl.application.inference.MPEInference
+import org.linqs.psl.application.learning.weight.maxlikelihood.MaxLikelihoodMPE
+import org.linqs.psl.config.*
+import org.linqs.psl.core.*
+import org.linqs.psl.core.inference.*
+import org.linqs.psl.database.DataStore
+import org.linqs.psl.database.Database
+import org.linqs.psl.database.DatabasePopulator
+import org.linqs.psl.database.Partition
+import org.linqs.psl.database.rdbms.RDBMSDataStore
+import org.linqs.psl.database.rdbms.driver.H2DatabaseDriver
+import org.linqs.psl.database.rdbms.driver.H2DatabaseDriver.Type
+import org.linqs.psl.utils.evaluation.result.*
+import org.linqs.psl.utils.evaluation.statistics.RankingScore
+import org.linqs.psl.utils.evaluation.statistics.SimpleRankingComparator
+import org.linqs.psl.groovy.*
+import org.linqs.psl.model.atom.GroundAtom;
+import org.linqs.psl.model.atom.QueryAtom
+import org.linqs.psl.model.term.*;
+import org.linqs.psl.model.rule.*;
+import org.linqs.psl.model.weight.*;
+import org.linqs.psl.model.formula.*;
+import org.linqs.psl.model.function.*;
+import org.linqs.psl.model.kernel.*;
+import org.linqs.psl.model.predicate.Predicate
+import org.linqs.psl.database.*
+import org.linqs.psl.utils.dataloading.InserterUtils;
+
 
 import com.google.common.collect.Iterables
-import edu.umd.cs.psl.model.kernel.CompatibilityKernel
-import edu.umd.cs.psl.model.parameters.PositiveWeight
-import edu.umd.cs.psl.model.parameters.Weight
 
 class DrugInteractionPrediction {
 	Logger log = LoggerFactory.getLogger(this.class);
@@ -128,7 +125,7 @@ class DrugInteractionPrediction {
     }
 
     def setupDataStore(config) {
-    	String dbpath = "/scratch1/psl_fsbio_collective";
+    	String dbpath = "/tmp/psl_fsbio_collective";
     	DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, config.createNewDataStore), config.cb);
 
     	return data
@@ -136,15 +133,15 @@ class DrugInteractionPrediction {
 
     def defineModel(config, data, m){
 
-    	m.add predicate : "ATCSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "SideEffectSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "GOSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "ligandSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "chemicalSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "seqSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "distSimilarity" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate : "interacts" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-    	m.add predicate: "validInteraction" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
+    	m.add predicate : "ATCSimilarity" , types:[ConstantType.UniqueID, ConstantType.UniqueID]
+    	m.add predicate : "SideEffectSimilarity" , types:[ConstantType.UniqueID, ConstantType.UniqueID]
+    	m.add predicate : "GOSimilarity" , types:[ConstantType.UniqueID, ConstantType.UniqueID]
+    	m.add predicate : "ligandSimilarity" , types:[ConstantType.UniqueID, ConstantType.UniqueID]
+    	m.add predicate : "chemicalSimilarity" , types:[ConstantType.UniqueID, ConstantType.UniqueID]
+    	m.add predicate : "seqSimilarity" , types:[ConstantType.UniqueID, ConstantType.UniqueID]
+    	m.add predicate : "distSimilarity" , types:[ConstantType.UniqueID, ConstantType.UniqueID]
+    	m.add predicate : "interacts" , types:[ConstantType.UniqueID, ConstantType.UniqueID]
+    	m.add predicate: "validInteraction" , types:[ConstantType.UniqueID, ConstantType.UniqueID]
 
     	//m.add predicate : "ignoredInteracts" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
 
@@ -161,17 +158,20 @@ class DrugInteractionPrediction {
 		//prior
 		m.add rule : validInteraction(D1,D2) >> ~interacts(D1,D2),  weight : config.initialWeight
 
-		m.add PredicateConstraint.Symmetric, on : interacts
+		m.add rule : "interacts(D1, D2) = interacts(D2, D1) ."
 
+		//m.add PredicateConstraint.Symmetric, on : interacts
+
+		/*
 		Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
 		
 		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-		weights.put(k, k.getWeight());
+		weights.put(k, k.getWeight()); */
 
 		config.closedPredicatesInference = [validInteraction, ATCSimilarity, distSimilarity, seqSimilarity, ligandSimilarity, GOSimilarity, SideEffectSimilarity, chemicalSimilarity];
 		config.closedPredicatesTruth = [interacts];
 
-		return weights
+		//return weights
 
 	}
 
@@ -476,7 +476,7 @@ class DrugInteractionPrediction {
 		InserterUtils.loadDelimitedData(insertCVTest, holdout_interactions_dir + interactions_ids);
 	}
 
-	def learnWeights(m,data,config,df, weights, learnerOption){ 
+	def learnWeights(m, data, config, df, learnerOption){ 
 
 	    /// Weight Learning
 	    // ===============
@@ -485,32 +485,21 @@ class DrugInteractionPrediction {
 	    def timeNow = new Date();
 	    log.debug("Fold "+ fold +" Weight Learning: " + timeNow);
 
-	    for (CompatibilityKernel ck : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-	    ck.setWeight(weights.get(ck))
+	    /*for (CompatibilityKernel ck : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
+	    ck.setWeight(weights.get(ck)) */
+
+	    if(fold > 1){
+            for(WeightedRule r : m.getRules()){
+                Weight w = new PositiveWeight(config.initialWeight);
+                r.setWeight(w);
+            }
+        }
 
 	    Database dbWLTrain = data.getDatabase(df.wlTest, config.closedPredicatesInference, df.wlTrain, df.wlSim);
 	    Database dbWLLabels = data.getDatabase(df.wlTruth, config.closedPredicatesTruth);
-
-	    /*
-	    Set<GroundAtom> atomLabels = Queries.getAllAtoms(dbWLLabels, interacts);
-	    for(GroundAtom ga : atomLabels){
-	    	System.out.println(ga.toString() + ": " + ga.getValue());
-	    }
-	    */
-
-	    def wLearn;
-	    switch(learnerOption) {
-	    	case 1:
-	    		wLearn = new MaxLikelihoodMPE(m,dbWLTrain,dbWLLabels,config.cb);
-	    		break;
-    		case 2:
-    			wLearn = new PairedDualLearner(m,dbWLTrain,dbWLLabels,config.cb);
-    			break;
-			case 3:
-				wLearn = new L1MaxMargin(m, dbWLTrain, dbWLLabels, config.cb);
-				break;
-	    }
 	    
+
+	    def wLearn = new MaxLikelihoodMPE(m,dbWLTrain,dbWLLabels,config.cb);
 	    wLearn.learn();
 	    wLearn.close();
 
@@ -533,7 +522,7 @@ class DrugInteractionPrediction {
 	    Database dbCVTrain = data.getDatabase(testPartition, config.closedPredicatesInference , evidencePartition, simPartition);
 
 	    MPEInference mpe = new MPEInference(m, dbCVTrain, config.cb);
-	    FullInferenceResult result = mpe.mpeInference();
+	    mpe.mpeInference();
 	    mpe.close();
 	    mpe.finalize();
 	    dbCVTrain.close();
@@ -613,7 +602,8 @@ class DrugInteractionPrediction {
 	  	def config = this.setupConfig(numFolds, numDrugs, experimentName, blockingNum, blockingType, interactionType, createDS);
 	    def data = this.setupDataStore(config);
 	    PSLModel m = new PSLModel(this, data);
-	    def weights = this.defineModel(config, data, m);
+
+	    this.defineModel(config, data, m);
 	    DrugInteractionEvalResults de = new DrugInteractionEvalResults(config.numFolds);
 
 	    if(config.createNewDataStore){
@@ -633,7 +623,7 @@ class DrugInteractionPrediction {
 	    	}
 
 			if(config.doWeightLearning){ 
-				this.learnWeights(m,data,config,df, weights, 1);
+				this.learnWeights(m,data,config,df, 1);
 			}
 			this.runInference(m,data,config,df, df.cvTest, df.cvTrain, df.cvSim);
 
