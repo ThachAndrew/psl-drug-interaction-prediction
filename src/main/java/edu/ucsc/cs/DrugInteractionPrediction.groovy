@@ -28,6 +28,7 @@ import org.linqs.psl.model.atom.GroundAtom;
 import org.linqs.psl.model.atom.QueryAtom
 import org.linqs.psl.model.term.*;
 import org.linqs.psl.model.rule.*;
+import org.linqs.psl.model.rule.arithmetic.UnweightedArithmeticRule;
 import org.linqs.psl.model.weight.*;
 import org.linqs.psl.model.formula.*;
 import org.linqs.psl.model.function.*;
@@ -143,10 +144,6 @@ class DrugInteractionPrediction {
     	m.add predicate : "interacts" , types:[ConstantType.UniqueID, ConstantType.UniqueID]
     	m.add predicate: "validInteraction" , types:[ConstantType.UniqueID, ConstantType.UniqueID]
 
-    	//m.add predicate : "ignoredInteracts" , types:[ArgumentType.UniqueID, ArgumentType.UniqueID]
-
-    	Random rand = new Random();
-
     	m.add rule : (ATCSimilarity(D1, D2) & interacts(D1, D3) & validInteraction(D1, D3) & validInteraction(D2, D3) & (D2 - D3) & (D1 - D2))>>interacts(D2, D3) , weight:config.initialWeight
 		m.add rule : (SideEffectSimilarity(D1, D2) & interacts(D1, D3) & validInteraction(D1, D3) & validInteraction(D2, D3) & (D2 - D3) & (D1 - D2))>>interacts(D2, D3) , weight:config.initialWeight
 		m.add rule : (GOSimilarity(D1, D2) & interacts(D1, D3) & validInteraction(D1, D3) & validInteraction(D2, D3) & (D2 - D3) & (D1 - D2))>>interacts(D2, D3) , weight:config.initialWeight
@@ -160,18 +157,9 @@ class DrugInteractionPrediction {
 
 		m.add rule : "interacts(D1, D2) = interacts(D2, D1) ."
 
-		//m.add PredicateConstraint.Symmetric, on : interacts
-
-		/*
-		Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
-		
-		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-		weights.put(k, k.getWeight()); */
-
 		config.closedPredicatesInference = [validInteraction, ATCSimilarity, distSimilarity, seqSimilarity, ligandSimilarity, GOSimilarity, SideEffectSimilarity, chemicalSimilarity];
 		config.closedPredicatesTruth = [interacts];
 
-		//return weights
 
 	}
 
@@ -283,8 +271,6 @@ class DrugInteractionPrediction {
 
 		wlTestingLinks.removeAll(cvTestingLinks);
 
-		//System.out.println( wlTrainingLinks.size() +',' + wlTestingLinks.size() + ',' + cvTrainingLinks.size() + ',' + cvTestingLinks.size());
-
 		// Reading triad target similarities from file
 		for (Predicate p : [ATCSimilarity, distSimilarity, seqSimilarity, ligandSimilarity, GOSimilarity, SideEffectSimilarity, chemicalSimilarity])
 		{
@@ -316,16 +302,6 @@ class DrugInteractionPrediction {
 					cvBlockedSim = triadBlock.knnBlockingSet(true,k,0, triadBlock.GetQueryTerms(allSimilarities, 0), allSimilarities);
 					wlBlockedSim = triadBlock.knnBlockingSet(true,k,0, triadBlock.GetQueryTerms(allSimilarities, 0), allSimilarities);
 			}
-
-			
-
-			/*
-			// Get the list of drugs
-			def drugSet = triadBlock.GetQueryTerms(allSimilarities, 0); //SF
-
-			// Get k similarities for those drugs
-			def blockedSimilarities = triadBlock.knnBlockingSet(true, 5, 0, drugSet, allSimilarities); //SF
-			*/
 
 			// Inserting them into the partition - SF
 			def cvInsert = data.getInserter(p, df.cvSim)
@@ -485,13 +461,12 @@ class DrugInteractionPrediction {
 	    def timeNow = new Date();
 	    log.debug("Fold "+ fold +" Weight Learning: " + timeNow);
 
-	    /*for (CompatibilityKernel ck : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-	    ck.setWeight(weights.get(ck)) */
-
 	    if(fold > 1){
-            for(WeightedRule r : m.getRules()){
-                Weight w = new PositiveWeight(config.initialWeight);
-                r.setWeight(w);
+            for(Rule r : m.getRules()){
+            	if ((r instanceof WeightedRule)){
+            		Weight w = new PositiveWeight(config.initialWeight);
+                	r.setWeight(w);	
+            	}
             }
         }
 
@@ -631,6 +606,7 @@ class DrugInteractionPrediction {
 
 	  	}
 	  	
+	  	data.close();
 
 	  	return de;
 
