@@ -53,8 +53,9 @@ public class OutputWriter {
 			writer = new BufferedWriter(new FileWriter(resultsFile, appendOption));
 			
 			for (GroundAtom atom : Queries.getAllAtoms(result, p)){
+				// take a look at the GroundAtom subclasses.  
+				// https://psl.linqs.org/api/2.3.0/
 				Constant[] terms = atom.getArguments();
-                                
                                 StringBuilder output = new StringBuilder();
                                 for (Constant t : terms){
                                     output.append(t + ",");

@@ -596,10 +596,13 @@ class DrugInteractionPrediction {
 	    	else{
 	    		this.resetDataForFold(config, data, df);
 	    	}
-
 			if(config.doWeightLearning){ 
+				//FIXME: dump these as well, look at the cross fold
 				this.learnWeights(m,data,config,df, 1);
 			}
+
+			//FIXME: dump data here
+
 			this.runInference(m,data,config,df, df.cvTest, df.cvTrain, df.cvSim);
 
 			this.evaluateResults(data,config,df,de, df.cvTruth, df.cvTest, false);
