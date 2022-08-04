@@ -35,7 +35,8 @@ public class OutputWriter {
         this.fold = fold;
         this.subDir = subDir;
 	}
-	
+
+	// print atoms here	
 	public void outputToFile(boolean appendOption){
 		BufferedWriter writer = null;
 		String dir = "output" + java.io.File.separator + subDir;
