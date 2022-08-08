@@ -602,6 +602,11 @@ class DrugInteractionPrediction {
 			System.out.println("DATADUMP fold: "+  fold + " ");
 
 			//FIXME: dump data here
+			Database dbCVTrain = data.getDatabase(df.cvTest, config.closedPredicatesInference, df.cvTrain, df.cvSim);
+			Iterable<RandomVariableAtom> rv_atoms = dbCVTrain.getAllCachedRandomVariableAtoms()
+
+			// Sanity check, this should return 0
+			List<GroundAtom> ground_atoms = dbCVTrain.getAllGroundAtoms(StandardPredicate)
 
 			//this.runInference(m,data,config,df, df.cvTest, df.cvTrain, df.cvSim);
 
