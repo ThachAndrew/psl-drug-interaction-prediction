@@ -587,6 +587,7 @@ class DrugInteractionPrediction {
 				DrugInteractionFold df = new DrugInteractionFold(fold, wl);
 
 			if(config.createNewDataStore){
+				System.out.println("DATADUMP creating NewDataStore: ");
 				this.loadInteractionsData(config, data, df, true);
 				this.blockSimilarityData(config, data, df);
 			}
@@ -603,14 +604,17 @@ class DrugInteractionPrediction {
 
 			//FIXME: dump data here
 			Database dbCVTrain = data.getDatabase(df.cvTest, config.closedPredicatesInference, df.cvTrain, df.cvSim);
-			Iterable<RandomVariableAtom> rv_atoms = dbCVTrain.getAllCachedRandomVariableAtoms()
+			// type should be an Iterable<RandomVariableAtom> 
+			//Iterable<RandomVariableAtom> rv_atoms = dbCVTrain.getAllCachedRandomVariableAtoms()
+			def rv_atoms = dbCVTrain.getAllCachedRandomVariableAtoms()
+			System.out.println("rv atoms is type: " + obj.getClass())
 
-			// Sanity check, this should return 0
-			List<GroundAtom> ground_atoms = dbCVTrain.getAllGroundAtoms(StandardPredicate)
+			//FIXME: Need to add up all whte standard predicate ground_atoms 
+			// Sanity check, the sum should return 0?
+			//List<GroundAtom> ground_atoms = dbCVTrain.getAllGroundAtoms(StandardPredicate)
 
 			//this.runInference(m,data,config,df, df.cvTest, df.cvTrain, df.cvSim);
 
-			//FIXME: change last argument to true to enable the inferred-predicates.
 			//this.evaluateResults(data,config,df,de, df.cvTruth, df.cvTest, false);
 
 		}
