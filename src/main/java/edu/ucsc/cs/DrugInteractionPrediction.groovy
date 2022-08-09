@@ -598,20 +598,27 @@ class DrugInteractionPrediction {
 				//FIXME: dump these as well, look at the cross fold
 				System.out.println("DATADUMP weightLearning: ");
 
-				this.learnWeights(m,data,config,df, 1);
+				//this.learnWeights(m,data,config,df, 1);
 			}
 			System.out.println("DATADUMP fold: "+  fold + " ");
 
 			//FIXME: dump data here
-			Database dbCVTrain = data.getDatabase(df.cvTest, config.closedPredicatesInference, df.cvTrain, df.cvSim);
-			// type should be an Iterable<RandomVariableAtom> 
-			//Iterable<RandomVariableAtom> rv_atoms = dbCVTrain.getAllCachedRandomVariableAtoms()
-			def rv_atoms = dbCVTrain.getAllCachedRandomVariableAtoms()
-			System.out.println("rv atoms is type: " + obj.getClass())
+			//Database dbCVTrain = data.getDatabase(df.cvTest, config.closedPredicatesInference, df.cvTrain, df.cvSim);
+			def dbCVTrain = data.getDatabase(df.cvTest, config.closedPredicatesInference, df.cvTrain, df.cvSim);
+			System.out.println("DATADUMP dbCVTrain is type: " + dbCVTrain.getClass())
+			
+			//FIXME: these don't work unless using PSL 2.3.0
+		 	//dbCVTrain.outputRandomVariableAtoms()	
+		 	//dbCVTrain.outputRandomVariableAtoms("datadump.txt")	
 
-			//FIXME: Need to add up all whte standard predicate ground_atoms 
-			// Sanity check, the sum should return 0?
-			//List<GroundAtom> ground_atoms = dbCVTrain.getAllGroundAtoms(StandardPredicate)
+			// Type should be Set<StandardPredicate>
+			def set_preds = dbCVTrain.getRegisteredPredicates()
+			//set_preds.forach(System.out::println);
+			System.out.println("DATADUMP printing Registered Predicates")
+			for (String s : set_preds) {
+			    System.out.println(s);
+			}
+
 
 			//this.runInference(m,data,config,df, df.cvTest, df.cvTrain, df.cvSim);
 
