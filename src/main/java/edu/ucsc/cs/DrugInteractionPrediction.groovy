@@ -603,20 +603,22 @@ class DrugInteractionPrediction {
 			System.out.println("DATADUMP fold: "+  fold + " ");
 
 			//FIXME: dump data here
-			//Database dbCVTrain = data.getDatabase(df.cvTest, config.closedPredicatesInference, df.cvTrain, df.cvSim);
-			def dbCVTrain = data.getDatabase(df.cvTest, config.closedPredicatesInference, df.cvTrain, df.cvSim);
-			System.out.println("DATADUMP dbCVTrain is type: " + dbCVTrain.getClass())
+			//def dbCVTrain = data.getDatabase(df.cvTest, config.closedPredicatesInference, df.cvTrain, df.cvSim);
+			//System.out.println("DATADUMP dbCVTrain is type: " + dbCVTrain.getClass())
 			
-			//FIXME: these don't work unless using PSL 2.3.0
-		 	//dbCVTrain.outputRandomVariableAtoms()	
-		 	//dbCVTrain.outputRandomVariableAtoms("datadump.txt")	
+				
+			// query database for partitions
+			def database = data.getDatabase(df.cvTrain)
 
 			// Type should be Set<StandardPredicate>
-			def set_preds = dbCVTrain.getRegisteredPredicates()
-			//set_preds.forach(System.out::println);
+			def set_preds = data.getRegisteredPredicates()
 			System.out.println("DATADUMP printing Registered Predicates")
-			for (String s : set_preds) {
-			    System.out.println(s);
+			for (Predicate predicate : set_preds) {
+			    System.out.println("DATADUMP working on printing atoms in predicate: " + predicate);
+			    for(GroundAtom atom : Queries.getAllAtoms(database, predicate)){
+				System.out.println("DATADUMP atom: " + atom)	
+			
+			    }
 			}
 
 
