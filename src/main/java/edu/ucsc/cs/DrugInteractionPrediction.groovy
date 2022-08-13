@@ -597,41 +597,29 @@ class DrugInteractionPrediction {
 			if(config.doWeightLearning){ 
 				//FIXME: dump these as well, look at the cross fold
 				System.out.println("DATADUMP weightLearning: ");
-
 				//this.learnWeights(m,data,config,df, 1);
 			}
-			System.out.println("DATADUMP fold: "+  fold + " ");
 
 			//FIXME: dump data here
-			//def dbCVTrain = data.getDatabase(df.cvTest, config.closedPredicatesInference, df.cvTrain, df.cvSim);
-			//System.out.println("DATADUMP dbCVTrain is type: " + dbCVTrain.getClass())
-			
 				
 			// query database for partitions
 			def database = data.getDatabase(df.cvTrain)
 
 			// Type should be Set<StandardPredicate>
 			def set_preds = data.getRegisteredPredicates()
-			System.out.println("DATADUMP printing Registered Predicates")
+			System.out.println("DUMPING_FOLD: " + fold)
 			for (Predicate predicate : set_preds) {
-			    System.out.println("DATADUMP working on printing atoms in predicate: " + predicate);
+			    System.out.println("----DUMPING_PREDICATE: " + predicate);
 			    for(GroundAtom atom : Queries.getAllAtoms(database, predicate)){
-				System.out.println("DATADUMP atom: " + atom)	
-			
+				System.out.println("--------DUMPING_ATOM: " + atom + ", Truth Value: " + atom.getValue() + ", Confidence Value: " + atom.getConfidenceValue())
 			    }
 			}
-
-
 			//this.runInference(m,data,config,df, df.cvTest, df.cvTrain, df.cvSim);
 
 			//this.evaluateResults(data,config,df,de, df.cvTruth, df.cvTest, false);
-
 		}
-
 		data.close();
-
 		return de;
-
 	}
 
 	static void main(args){
