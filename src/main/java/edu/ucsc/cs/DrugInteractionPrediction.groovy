@@ -1,5 +1,11 @@
 package edu.ucsc.cs;
 
+// Quick hack for redirecting stdout 
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
+
+
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Random;
@@ -296,6 +302,7 @@ class DrugInteractionPrediction {
 					wlBlockedSim = triadBlock.observedTrainWithTestTerm(allSimilarities, wlTrainingLinks, wlTestingLinks, 5, k );
 					break;
 				case 5:
+					// This is used for dataset2 (the smaller one)
 					cvBlockedSim = triadBlock.knnBlockingSet(true,k,0, triadBlock.GetQueryTerms(allSimilarities, 0), allSimilarities);
 					wlBlockedSim = triadBlock.knnBlockingSet(true,k,0, triadBlock.GetQueryTerms(allSimilarities, 0), allSimilarities);
 			}
@@ -507,6 +514,7 @@ class DrugInteractionPrediction {
 
 	def evaluateResults(data,config,df,de, truthPartition, predictionPartition, writeToFile){ 
 
+		//==============
 		//Begin Evaluate
 		//==============
 
@@ -584,26 +592,38 @@ class DrugInteractionPrediction {
 
 		for(int fold = 1; fold <= config.numFolds; fold++){
 			def wl = (fold % config.numFolds) + 1
-				DrugInteractionFold df = new DrugInteractionFold(fold, wl);
+			DrugInteractionFold df = new DrugInteractionFold(fold, wl);
 
 			if(config.createNewDataStore){
-				System.out.println("DATADUMP creating NewDataStore: ");
+				System.out.println("DATADUMP Loading InteractionData ");
 				this.loadInteractionsData(config, data, df, true);
+				System.out.println("DATADUMP Blocking Similarity Data ");
 				this.blockSimilarityData(config, data, df);
 			}
 			else{
 				this.resetDataForFold(config, data, df);
 			}
 			if(config.doWeightLearning){ 
-				//FIXME: dump these as well, look at the cross fold
-				System.out.println("DATADUMP weightLearning: ");
+				//TODO: dump these as well, look at the cross fold
+				System.out.println("DATADUMP skipping weightLearning: ");
 				//this.learnWeights(m,data,config,df, 1);
 			}
 
-			//FIXME: dump data here
-				
-			// query database for partitions
-			def database = data.getDatabase(df.cvTrain)
+			////////////
+			//DATADUMP//
+			////////////
+
+			//FIXME: every fold still uses the same partition
+			def database = data.getDatabase(df.cvTrain, df.cvSim)
+			//def database = data.getDatabase(testPartition, config.closedPredicatesInference , evidencePartition, simPartition);
+			//def database = data.getDatabase(df.cvTest, config.closedPredicatesInference, df.cvTrain, df.cvSim);
+
+			// redirect stdout to file
+    			File file = new File("observed.txt");
+    			//Instantiating the PrintStream class
+    			PrintStream stream = new PrintStream(file);
+    			System.out.println("From now on "+file.getAbsolutePath()+" will be your console");
+    			System.setOut(stream);
 
 			// Type should be Set<StandardPredicate>
 			def set_preds = data.getRegisteredPredicates()
@@ -614,9 +634,13 @@ class DrugInteractionPrediction {
 				System.out.println("--------DUMPING_ATOM: " + atom + ", Truth Value: " + atom.getValue() + ", Confidence Value: " + atom.getConfidenceValue())
 			    }
 			}
+
+			////////////////
+
 			//this.runInference(m,data,config,df, df.cvTest, df.cvTrain, df.cvSim);
 
 			//this.evaluateResults(data,config,df,de, df.cvTruth, df.cvTest, false);
+			System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out)));
 		}
 		data.close();
 		return de;
