@@ -652,6 +652,41 @@ class DrugInteractionPrediction {
 			    }
 			}
 
+			///////////////////
+			//DATADUMP Weights//
+			//////////////////
+			database = data.getDatabase(df.wlTrain, df.wlSim)
+			set_preds = data.getRegisteredPredicates()
+
+			for (Predicate predicate : set_preds) {
+			    // redirect stdout to file
+    			    file = new File("weight_train_" + predicate + ".txt");
+    			    stream = new PrintStream(file);
+    			    System.setOut(stream);
+
+			    for(GroundAtom atom : Queries.getAllAtoms(database, predicate)){
+				//System.out.println("--------DUMPING_ATOM: " + atom + ", Truth Value: " + atom.getValue() + ", Confidence Value: " + atom.getConfidenceValue())
+				def atom_args = atom.getArguments()
+				System.out.println(atom_args[0].toString() + "\t" + atom_args[1].toString() + "\t" + atom.getValue())
+			    }
+			}
+
+			database = data.getDatabase(df.wlTruth)
+			set_preds = data.getRegisteredPredicates()
+
+			for (Predicate predicate : set_preds) {
+			    // redirect stdout to file
+    			    file = new File("weight_truth_" + predicate + ".txt");
+    			    stream = new PrintStream(file);
+    			    System.setOut(stream);
+
+			    for(GroundAtom atom : Queries.getAllAtoms(database, predicate)){
+				//System.out.println("--------DUMPING_ATOM: " + atom + ", Truth Value: " + atom.getValue() + ", Confidence Value: " + atom.getConfidenceValue())
+				def atom_args = atom.getArguments()
+				System.out.println(atom_args[0].toString() + "\t" + atom_args[1].toString() + "\t" + atom.getValue())
+			    }
+			}
+
 			////////////////
 
 			//this.runInference(m,data,config,df, df.cvTest, df.cvTrain, df.cvSim);
