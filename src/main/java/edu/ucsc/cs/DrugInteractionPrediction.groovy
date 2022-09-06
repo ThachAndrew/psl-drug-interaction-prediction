@@ -253,10 +253,13 @@ class DrugInteractionPrediction {
 			data.deletePartition(data.getPartition(df.cvSim));
 		}
 
+		
+		log.debug("Getting Partitions");
 		df.cvSim = data.getPartition('cvsim' + cvfold);
 		df.wlSim = data.getPartition('wlsim' + wlfold);
 
 		Partition readSimilarities = data.getPartition("all_sims");
+		log.debug("Getting Databases");
 		Database getSimilarities = data.getDatabase(data.getPartition("simDummy" + cvfold), readSimilarities);
 
 		//Dummy dbs for wl train, wl test, cv train, cv test for more involved blocking techniques - DS
@@ -267,11 +270,13 @@ class DrugInteractionPrediction {
 		Database cvTrainLinks = data.getDatabase(data.getPartition("cvTrainDummy" + cvfold ), df.cvTrain);
 		Database cvTestLinks = data.getDatabase(data.getPartition("cvtestdummy" + cvfold), df.cvTruth);
 
+		log.debug("Getting AllAtoms");
 		Set<GroundAtom> wlTrainingLinks = Queries.getAllAtoms(wlTrainLinks, interacts);
 		Set<GroundAtom> cvTrainingLinks = Queries.getAllAtoms(cvTrainLinks, interacts);
 		Set<GroundAtom> wlTestingLinks = Queries.getAllAtoms(wlTestLinks, interacts);
 		Set<GroundAtom> cvTestingLinks = Queries.getAllAtoms(cvTestLinks, interacts);
 
+		log.debug("Removing TestingLinks");
 		wlTestingLinks.removeAll(cvTestingLinks);
 
 		// Reading triad target similarities from file
@@ -590,7 +595,7 @@ class DrugInteractionPrediction {
 			this.loadData(data, config);
 		}
 
-		for(int fold = 1; fold <= config.numFolds; fold++){
+		for(int fold = 3; fold <= config.numFolds; fold++){
 			def wl = (fold % config.numFolds) + 1
 			DrugInteractionFold df = new DrugInteractionFold(fold, wl);
 
@@ -621,7 +626,7 @@ class DrugInteractionPrediction {
 			def set_preds = data.getRegisteredPredicates()
 			for (Predicate predicate : set_preds) {
 	      		    // redirect stdout to file
-    	      	 	    file = new File("observed_" + predicate  + ".txt");
+    	      	 	    file = new File("fold_" + fold + "_eval_observed_" + predicate  + ".txt");
     	      		    stream = new PrintStream(file);
     	      		    System.setOut(stream);
 
@@ -641,7 +646,7 @@ class DrugInteractionPrediction {
 
 			for (Predicate predicate : set_preds) {
 			    // redirect stdout to file
-    			    file = new File("truth_" + predicate + ".txt");
+    			    file = new File("fold_" + fold + "_eval_truth_" + predicate + ".txt");
     			    stream = new PrintStream(file);
     			    System.setOut(stream);
 
@@ -660,7 +665,7 @@ class DrugInteractionPrediction {
 
 			for (Predicate predicate : set_preds) {
 			    // redirect stdout to file
-    			    file = new File("weight_train_" + predicate + ".txt");
+    			    file = new File("fold_" + fold + "_learn_observed_" + predicate + ".txt");
     			    stream = new PrintStream(file);
     			    System.setOut(stream);
 
@@ -676,7 +681,7 @@ class DrugInteractionPrediction {
 
 			for (Predicate predicate : set_preds) {
 			    // redirect stdout to file
-    			    file = new File("weight_truth_" + predicate + ".txt");
+    			    file = new File("fold_" + fold + "_learn_truth_" + predicate + ".txt");
     			    stream = new PrintStream(file);
     			    System.setOut(stream);
 
@@ -700,8 +705,8 @@ class DrugInteractionPrediction {
 
 	static void main(args){
 
-		//String[] experiments = ['all_dataset2', 'all_dataset1']
-		String[] experiments = ['all_dataset2']
+		String[] experiments = ['all_dataset1']
+		//String[] experiments = ['all_dataset2']
 			String[] interactionTypes = ['all'];
 
 		for(String exp: experiments){
